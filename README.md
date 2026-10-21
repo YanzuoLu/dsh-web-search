@@ -24,7 +24,7 @@ A compatible message protocol does **not** guarantee server-side search support.
 
 Search uses the same pi-ai `Models` collection, resolved model descriptor and credential resolver as the active dsh route. Configured endpoints, model overrides, headers, API-key references and OAuth refresh remain owned by dsh. The plugin does not read or keep a separate token file. Request-shaping plugins such as `dsh-anthropic-auth` remain in the fetch path.
 
-The model and reasoning effort follow the calling agent. Requests use SSE so citations and source URLs can be recovered from the raw provider response. The ordinary pi-ai parser simultaneously consumes the response. Search results are projected into dsh's existing `content`, `sources` and `truncated` result shape.
+By default the model and reasoning effort follow the calling agent; see [Configuration](#configuration) to pin them. Requests use SSE so citations and source URLs can be recovered from the raw provider response. The ordinary pi-ai parser simultaneously consumes the response. Search results are projected into dsh's existing `content`, `sources` and `truncated` result shape.
 
 There is one version-specific adapter bridge in `lib/dsh-model.js`. dsh 0.2.0-rc.2 does not publicly expose `model.api` or its authenticated Models collection. This bridge reads the adapter's immutable snapshot and calls its existing credential resolver. It neither modifies the adapter nor copies its authentication implementation. The dsh peer versions are exact because this bridge must be checked against future releases.
 
@@ -34,7 +34,26 @@ There is one version-specific adapter bridge in `lib/dsh-model.js`. dsh 0.2.0-rc
 dsh plugin --profile web add github:YanzuoLu/dsh-web-search
 ```
 
-Restart dsh after installing. There are no plugin settings. The existing dsh search-tool deadline still applies to the auxiliary model request.
+Restart dsh after installing. The existing dsh search-tool deadline still applies to the auxiliary model request.
+
+## Configuration
+
+Every field is optional. Without configuration, each search runs on the calling agent's model and reasoning effort.
+
+| Field | Meaning |
+|---|---|
+| `reasoningEffort` | Reasoning effort for every search request, clamped to what the model supports. `off` disables reasoning. |
+| `provider`, `model` | A fixed search route, set together. It must be a pi-ai route; a route without native search falls back to the original dsh backend. |
+
+Without `reasoningEffort`, a search on the caller's route uses the caller's effort, and a search on a fixed route uses that route's default effort.
+
+A search turn rarely needs deep reasoning. At high efforts it can run past dsh's search-tool deadline (`searchTimeoutMs`, 30 seconds by default), so pinning a lower effort keeps searches fast:
+
+```yaml
+- id: web-search
+  config:
+    reasoningEffort: medium
+```
 
 This plugin does not add Pi's `urls` argument, `url_context`, or model-assisted `web_fetch`.
 

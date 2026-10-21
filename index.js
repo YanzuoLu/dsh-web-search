@@ -6,17 +6,24 @@ import { searchNative } from './lib/search.js'
 
 export const name = 'web-search'
 export const inject = ['web', 'llm']
-export const Config = z.object({})
+export const Config = z.object({
+  provider: z.string().description('Provider of a fixed search model. Set together with model; unset searches on the calling agent\'s route.'),
+  model: z.string().description('Model id of a fixed search model. Set together with provider.'),
+  reasoningEffort: z.string().description('Reasoning effort for every search request; "off" disables reasoning. Unset follows the calling agent on its own route, or the fixed model\'s default.'),
+})
 
 const installations = new WeakMap()
 
 /** Interpose only on search dispatch; tool definitions and fetch stay untouched. */
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
+  if ((config.provider === undefined) !== (config.model === undefined)) {
+    throw new Error('web-search: set provider and model together')
+  }
   const web = ctx.web[symbols.original] ?? ctx.web
   ctx.effect(() => {
     let installation = installations.get(web)
     if (!installation) {
-      installation = installSearchBackend(web)
+      installation = installSearchBackend(web, callCtx => resolveSearchCall(callCtx, config))
       installations.set(web, installation)
     }
     installation.users += 1
