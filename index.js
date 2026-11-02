@@ -1,7 +1,8 @@
 import { symbols } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { WebError } from '@deepseek-ai/dsh-web'
 import { resolveSearchCall } from './lib/dsh-model.js'
-import { hasNativeSearch } from './lib/routing.js'
+import { hasNativeSearch, providerKind } from './lib/routing.js'
 import { searchNative } from './lib/search.js'
 
 export const name = 'web-search'
@@ -43,7 +44,10 @@ export function installSearchBackend(web, resolveCall = resolveSearchCall, searc
   let active = true
   async function wrapper(request, signal) {
     const call = active ? resolveCall(this.ctx) : undefined
-    if (!call || !hasNativeSearch(call.model)) return original.call(this, request, signal)
+    if (call && providerKind(call.model) === 'antigravity' && !hasNativeSearch(call.model, call.antigravity)) {
+      throw new WebError('Antigravity search requires provider antigravity, API antigravity-api and transport v1', 'WEB_PROVIDER_ERROR')
+    }
+    if (!call || !hasNativeSearch(call.model, call.antigravity)) return original.call(this, request, signal)
     const result = await search(call, request.query, signal)
     if (request.maxResults === undefined || result.sources.length <= request.maxResults) return result
     return { ...result, sources: result.sources.slice(0, request.maxResults), truncated: true }

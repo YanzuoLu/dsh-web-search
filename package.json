@@ -1,14 +1,15 @@
 {
   "name": "dsh-web-search",
-  "version": "0.1.0",
-  "description": "Model-native OpenAI and Anthropic search backends for dsh's unchanged web_search tool",
+  "version": "0.2.0",
+  "description": "Model-native OpenAI, Anthropic and Antigravity search for dsh's unchanged web_search tool",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
     "./package.json": "./package.json"
   },
-  "files": ["index.js", "lib", "cordis.patch.yml"],
+  "files": ["index.js", "lib", "dist", "cordis.patch.yml"],
+  "scripts": { "build": "node scripts/build.mjs" },
   "license": "MIT",
   "author": "Yanzuo Lu",
   "repository": {
