@@ -2,7 +2,7 @@
 
 Model-native OpenAI, Anthropic and Antigravity Google Search Grounding backends for DeepSeek Harness (dsh).
 
-The plugin changes only the backend behind dsh's existing `web_search`. Its name, `queries` parameter, description, permissions, timeouts, multi-query execution and presentation stay unchanged. `web_fetch` is untouched. Other routes still call the original search backend with the original request and cancellation signal. No search or fetch provider setting is rewritten.
+The plugin changes only the backend behind dsh's existing `web_search`. Its name, `queries` parameter, description, permissions, timeouts, multi-query execution and presentation stay unchanged. `web_fetch` is untouched. A route without supported native search can use a configured fallback model. Without that configuration, the original search backend receives the original request and cancellation signal. No search or fetch provider setting is rewritten.
 
 ## Routing
 
@@ -15,9 +15,9 @@ The calling agent's configured model selects the backend on each search, includi
 | `azure-openai-responses` | Azure Responses `web_search` |
 | `openai-codex-responses` | Codex Responses `web_search` |
 | `antigravity-api`, provider `antigravity`, transport v1 | Gemini Google Search Grounding |
-| Other protocols | Original dsh search backend |
+| Other protocols or model adapters | Configured fallback model, otherwise the original dsh search backend |
 
-Detection follows the installed [YanzuoLu/pi-web-search](https://github.com/YanzuoLu/pi-web-search) fork. Its special DeepSeek, ordinary Google and Ollama routes retain dsh's existing backend. Antigravity is a distinct route and requires the native provider-owned transport described below. Missing or incompatible Antigravity transport reports an error instead of silently forwarding the query to a different provider. Native xAI and gateway Grok models use the Responses backend with the Grok dialect. As in Pi, an explicit `model.compat.webSearchDialect` takes precedence over model-id detection when the configured model carries it.
+Detection follows the installed [YanzuoLu/pi-web-search](https://github.com/YanzuoLu/pi-web-search) fork. Its special DeepSeek, ordinary Google and Ollama protocols do not enter the native adapters above. Non-pi-ai routes and calls without an initiating agent use the configured fallback when present, otherwise dsh's existing backend. Antigravity is a distinct route and requires the native provider-owned transport described below. Missing or incompatible Antigravity transport reports an error instead of silently forwarding the query to a different provider. Native xAI and gateway Grok models use the Responses backend with the Grok dialect. As in Pi, an explicit `model.compat.webSearchDialect` takes precedence over model-id detection when the configured model carries it.
 
 A compatible message protocol does **not** guarantee server-side search support. A supported route whose server rejects the search tool reports that error rather than silently sending the query to another provider. Chat Completions is not treated as Responses.
 
@@ -53,10 +53,25 @@ Every field is optional. Without configuration, each search selects the calling 
 
 | Field | Meaning |
 |---|---|
-| `reasoningEffort` | Reasoning effort for every search request, clamped to what the model supports. `off` disables reasoning. |
-| `provider`, `model` | A fixed search route, set together. It must be a pi-ai route; a route without native search falls back to the original dsh backend, except that a misconfigured Antigravity route errors instead of crossing providers. |
+| `reasoningEffort` | Reasoning effort on the calling or fixed route, clamped to what the model supports. `off` disables reasoning. |
+| `provider`, `model` | A fixed search route, set together. It must be a pi-ai route. An unsupported protocol uses `fallback` when configured, otherwise the original dsh backend. |
+| `fallback.provider`, `fallback.model` | An optional native-search route used only when the primary route has no supported native search. Both fields are required inside `fallback`. |
+| `fallback.reasoningEffort` | Effort for the fallback route alone. `off` disables reasoning; unset uses that route's default, not the calling agent's effort or top-level `reasoningEffort`. |
 
 Without `reasoningEffort`, a search on the caller's route uses the caller's effort, and a search on a fixed route uses that route's default effort.
+
+For example, keep native Anthropic, Responses and Antigravity searches on their own routes, but search through a Codex subscription when the calling route uses Chat Completions:
+
+```yaml
+- id: web-search
+  config:
+    fallback:
+      provider: openai-codex
+      model: gpt-6.1-sol
+      reasoningEffort: high
+```
+
+Omit `fallback` or set it to `null` to keep the original dsh backend for unsupported routes. Fallback is a capability decision before dispatch, not an error retry. Native HTTP failures, quota errors and cancellation are propagated without trying the fallback. A fallback route without supported native search reports an error rather than silently using the original backend. Misconfigured Antigravity transports still report their existing error before fallback selection.
 
 A search turn rarely needs deep reasoning. At high efforts it can run past dsh's search-tool deadline (the host's configured outer tool budget), so pinning a lower effort keeps searches fast:
 
