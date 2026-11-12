@@ -4,6 +4,8 @@ Model-native OpenAI, Anthropic and Antigravity Google Search Grounding backends 
 
 The plugin changes only the backend behind dsh's existing `web_search`. Its name, `queries` parameter, description, permissions, timeouts, multi-query execution and presentation stay unchanged. `web_fetch` is untouched. A route without supported native search can use a configured fallback model. Without that configuration, the original search backend receives the original request and cancellation signal. No search or fetch provider setting is rewritten.
 
+The plugin targets dsh 0.2.2-rc.2. dsh declares `web_search` only while the search seam reports the calling route ready. The plugin answers ready for a route with a model that has supported native search, and for every route when a fallback is configured, because those searches authenticate through their own model route. Other routes keep the original backend's readiness. Readiness names only the route, so on a route whose models mix protocols an unsupported model can still reach the original backend and report its error.
+
 ## Routing
 
 The calling agent's configured model selects the backend on each search, including searches made by subagents. Provider names are not an allowlist. For example, an `nv-inference` or another renamed gateway model with `api: anthropic-messages` uses Anthropic search.
@@ -23,11 +25,11 @@ A compatible message protocol does **not** guarantee server-side search support.
 
 ## Transport and authentication
 
-OpenAI and Anthropic search use the same pi-ai `Models` collection, resolved model descriptor and credential resolver as the active dsh route. Configured endpoints, model overrides, headers, API-key references and OAuth refresh remain owned by dsh. The plugin does not read or keep a separate token file. Request-shaping plugins such as `dsh-anthropic-auth` remain in the fetch path.
+OpenAI and Anthropic search use the same pi-ai `Models` collection, resolved model descriptor and credential resolver as the active dsh route. Configured endpoints, model overrides, headers, API-key references and OAuth refresh remain owned by dsh. The plugin does not read or keep a separate token file. Header contributors on dsh's `llm-pi-ai/request-headers` waterfall apply to search requests as they do to chat. Request-shaping plugins such as `dsh-anthropic-auth` remain in the fetch path.
 
 By default the route and reasoning effort follow the calling agent; see [Configuration](#configuration) to pin them. OpenAI and Anthropic requests use SSE so citations and source URLs can be recovered from the raw provider response. The ordinary pi-ai parser simultaneously consumes the response. Search results are projected into dsh's existing `content`, `sources` and `truncated` result shape.
 
-There is one version-specific adapter bridge in `lib/dsh-model.js`. dsh 0.2.0-rc.2 does not publicly expose `model.api` or its authenticated Models collection. This bridge reads the adapter's immutable snapshot and calls its existing credential resolver for OpenAI and Anthropic. Antigravity instead receives the provider's public transport without resolving credentials here. It neither modifies the adapter nor copies its authentication implementation. The dsh peer versions are exact because this bridge must be checked against future releases.
+There is one version-specific adapter bridge in `lib/dsh-model.js`. dsh 0.2.2-rc.2 does not publicly expose `model.api` or its authenticated Models collection. This bridge reads the adapter's immutable snapshot and calls its existing credential resolver and request-header preparation for OpenAI and Anthropic. Antigravity instead receives the provider's public transport without resolving credentials here. It neither modifies the adapter nor copies its authentication implementation. The dsh peer versions are exact because this bridge must be checked against future releases.
 
 ### Antigravity integration
 
